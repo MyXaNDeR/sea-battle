@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="profile">
+    <h1>Профиль</h1>
+
+    <div class="profile-card">
+        <p><strong>Никнейм:</strong> {{ user.nickname }}</p>
+        <p><strong>Email:</strong> {{ user.email }}</p>
+    </div>
+
+    <div class="stats">
+        <div class="stat">
+            <span class="stat-value">{{ wins }}</span>
+            <span class="stat-label">Победы</span>
+        </div>
+
+        <div class="stat">
+            <span class="stat-value">{{ losses }}</span>
+            <span class="stat-label">Поражения</span>
+        </div>
+
+        <div class="stat">
+            <span class="stat-value">{{ total_games }}</span>
+            <span class="stat-label">Всего игр</span>
+        </div>
+    </div>
+
+    <a class="button" href="/play">Играть</a>
+    <a class="button secondary" href="/play-pvp">Играть с другом</a>
+</section>
+{% endblock %}

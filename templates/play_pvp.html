@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="game">
+    <h1>Морской бой: игрок против игрока</h1>
+
+    <div class="pvp-actions">
+        <button id="create-game" class="button">Создать игру</button>
+
+        <input id="join-code" placeholder="Код комнаты">
+        <button id="join-game" class="button secondary">Присоединиться</button>
+    </div>
+
+    <div id="status" class="status">
+        Создай игру или введи код комнаты.
+    </div>
+
+    <div class="boards">
+        <div>
+            <h2>Твоё поле</h2>
+            <div id="your-board" class="board"></div>
+        </div>
+
+        <div>
+            <h2>Поле противника</h2>
+            <div id="enemy-board" class="board"></div>
+        </div>
+    </div>
+</section>
+
+<script>
+    const statusElement = document.getElementById("status");
+    const yourBoardElement = document.getElementById("your-board");
+    const enemyBoardElement = document.getElementById("enemy-board");
+    const joinCodeElement = document.getElementById("join-code");
+
+    let gameId = null;
+    let updateTimer = null;
+
+    document.getElementById("create-game").addEventListener("click", async () => {
+        const response = await fetch("/games/pvp", {
+            method: "POST",
+        });
+
+        if (!response.ok) {
+            statusElement.textContent = "Сначала войди в аккаунт.";
+            return;
+        }
+
+        const data = await response.json();
+        gameId = data.game_id;
+
+        statusElement.textContent = `Код комнаты: ${gameId}. Ждём второго игрока...`;
+        startUpdating();
+    });
+
+    document.getElementById("join-game").addEventListener("click", async () => {
+        const code = joinCodeElement.value.trim().toUpperCase();
+
+        if (!code) {
+            statusElement.textContent = "Введи код комнаты.";
+            return;
+        }
+
+        const response = await fetch(`/games/pvp/${code}/join`, {
+            method: "POST",
+        });
+
+        if (!response.ok) {
+            statusElement.textContent = "Не удалось присоединиться.";
+            return;
+        }
+
+        gameId = code;
+        statusElement.textContent = "Ты присоединился к игре.";
+        startUpdating();
+    });
+
+    enemyBoardElement.addEventListener("click", async (event) => {
+        if (!gameId || !event.target.dataset.row) {
+            return;
+        }
+
+        const row = Number(event.target.dataset.row);
+        const col = Number(event.target.dataset.col);
+
+        const response = await fetch(`/games/pvp/${gameId}/shot`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ row, col }),
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            statusElement.textContent = error.detail || "Ошибка хода.";
+            return;
+        }
+
+        const data = await response.json();
+        renderBoards(data);
+        updateStatus(data);
+    });
+
+    function startUpdating() {
+        clearInterval(updateTimer);
+        updateTimer = setInterval(updateGame, 2000);
+        updateGame();
+    }
+
+    async function updateGame() {
+        if (!gameId) {
+            return;
+        }
+
+        const response = await fetch(`/games/pvp/${gameId}`);
+
+        if (!response.ok) {
+            return;
+        }
+
+        const data = await response.json();
+        renderBoards(data);
+        updateStatus(data);
+    }
+
+    function renderBoards(data) {
+        renderBoard(yourBoardElement, data.your_board);
+        renderBoard(enemyBoardElement, data.enemy_board);
+    }
+
+    function renderBoard(element, board) {
+        element.innerHTML = "";
+
+        board.forEach((row, rowIndex) => {
+            row.forEach((cell, colIndex) => {
+                const cellElement = document.createElement("div");
+                cellElement.className = `cell ${cell}`;
+                cellElement.dataset.row = rowIndex;
+                cellElement.dataset.col = colIndex;
+
+                if (cell === "ship") {
+                    cellElement.textContent = "■";
+                }
+
+                if (cell === "hit") {
+                    cellElement.textContent = "X";
+                }
+
+                if (cell === "miss") {
+                    cellElement.textContent = "O";
+                }
+
+                element.appendChild(cellElement);
+            });
+        });
+    }
+
+    function updateStatus(data) {
+        if (data.is_finished) {
+            clearInterval(updateTimer);
+
+            statusElement.textContent = data.winner_id
+                ? "Игра окончена! Есть победитель."
+                : "Игра окончена.";
+
+            return;
+        }
+
+        statusElement.textContent = data.your_turn
+            ? "Твой ход!"
+            : "Сейчас ход противника...";
+    }
+</script>
+{% endblock %}

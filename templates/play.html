@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="game">
+    <h1>Морской бой против компьютера</h1>
+
+    <div id="status" class="status">
+        Нажми «Начать игру».
+    </div>
+
+    <button id="start-game" class="button">Начать игру</button>
+
+    <div class="boards">
+        <div>
+            <h2>Твоё поле</h2>
+            <div id="your-board" class="board"></div>
+        </div>
+
+        <div>
+            <h2>Поле противника</h2>
+            <div id="enemy-board" class="board"></div>
+        </div>
+    </div>
+</section>
+
+<script>
+    const startButton = document.getElementById("start-game");
+    const statusElement = document.getElementById("status");
+    const yourBoardElement = document.getElementById("your-board");
+    const enemyBoardElement = document.getElementById("enemy-board");
+
+    let gameId = null;
+
+    startButton.addEventListener("click", async () => {
+        const response = await fetch("/games/ai", {
+            method: "POST",
+        });
+
+        if (!response.ok) {
+            statusElement.textContent = "Сначала войди в аккаунт.";
+            return;
+        }
+
+        const data = await response.json();
+        gameId = data.game_id;
+
+        statusElement.textContent = "Игра началась. Твой ход!";
+
+        const gameResponse = await fetch(`/games/ai/${gameId}`);
+        const gameData = await gameResponse.json();
+
+        renderBoards(gameData);
+    });
+
+    enemyBoardElement.addEventListener("click", async (event) => {
+        if (!gameId || !event.target.dataset.row) {
+            return;
+        }
+
+        const row = Number(event.target.dataset.row);
+        const col = Number(event.target.dataset.col);
+
+        const response = await fetch(`/games/ai/${gameId}/shot`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ row, col }),
+        });
+
+        if (!response.ok) {
+            return;
+        }
+
+        const data = await response.json();
+        renderBoards(data);
+        updateStatus(data);
+    });
+
+    function renderBoards(data) {
+        renderBoard(yourBoardElement, data.your_board, false);
+        renderBoard(enemyBoardElement, data.enemy_board, true);
+    }
+
+    function renderBoard(element, board, clickable) {
+        element.innerHTML = "";
+
+        board.forEach((row, rowIndex) => {
+            row.forEach((cell, colIndex) => {
+                const cellElement = document.createElement("div");
+                cellElement.className = `cell ${cell}`;
+                cellElement.dataset.row = rowIndex;
+                cellElement.dataset.col = colIndex;
+
+                if (cell === "ship") {
+                    cellElement.textContent = "■";
+                }
+
+                if (cell === "hit") {
+                    cellElement.textContent = "X";
+                }
+
+                if (cell === "miss") {
+                    cellElement.textContent = "O";
+                }
+
+                element.appendChild(cellElement);
+            });
+        });
+    }
+
+    function updateStatus(data) {
+        const messages = {
+            miss: "Мимо! Ход компьютера...",
+            hit: "Попадание! Стреляй ещё.",
+            sunk: "Убил! Стреляй ещё.",
+            already_shot: "В эту клетку уже стреляли.",
+        };
+
+        let text = messages[data.player_result] || "Ход сделан.";
+
+        if (data.ai_result) {
+            text += ` Компьютер: ${messages[data.ai_result] || "выстрел"}.`;
+        }
+
+        if (data.is_finished) {
+            text = data.winner === "human"
+                ? "Победа! Все корабли компьютера потоплены."
+                : "Поражение. Компьютер потопил все твои корабли.";
+        }
+
+        statusElement.textContent = text;
+    }
+</script>
+{% endblock %}
